@@ -1,5 +1,6 @@
 import type { User } from '@/types/user';
 import type { Note } from '@/types/note';
+import type { AxiosResponse } from 'axios';
 import { api } from './api';
 
 export interface RegisterRequest {
@@ -30,9 +31,8 @@ export const logout = async (): Promise<void> => {
   await api.post('/auth/logout');
 };
 
-export const checkSession = async (): Promise<{ success: boolean }> => {
-  const res = await api.get<{ success: boolean }>('/auth/session');
-  return res.data;
+export const checkSession = async (): Promise<AxiosResponse<{ success: boolean }>> => {
+  return api.get<{ success: boolean }>('/auth/session');
 };
 
 export const getMe = async (): Promise<User> => {

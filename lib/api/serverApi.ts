@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import type { AxiosResponse } from 'axios';
 import type { User } from '@/types/user';
 import { api } from './api';
 
@@ -34,10 +35,9 @@ export const getMe = async (): Promise<User> => {
   return res.data;
 };
 
-export const checkSession = async (): Promise<{ success: boolean }> => {
+export const checkSession = async (): Promise<AxiosResponse<{ success: boolean }>> => {
   const cookieStore = await cookies();
-  const res = await api.get<{ success: boolean }>('/auth/session', {
+  return api.get<{ success: boolean }>('/auth/session', {
     headers: { Cookie: cookieStore.toString() },
   });
-  return res.data;
 };

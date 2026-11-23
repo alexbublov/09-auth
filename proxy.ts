@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { parseSetCookie } from 'cookie';
+import { checkSession } from './lib/api/serverApi';
 
 const privateRoutes = ['/profile', '/notes'];
 const publicRoutes = ['/sign-in', '/sign-up'];
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const accessToken = request.cookies.get('accessToken')?.value;
-  const refreshToken = request.cookies.get('refreshToken')?.value;
-  const isAuthenticated = Boolean(accessToken || refreshToken);
+  const cookieStore = await cookies();
+  const accessToken = cookieStore.get('accessToken')?.value;
+  const refreshToken = cookieStore.get('refreshToken')?.value;
+  let isAuthenticated = Boolean(accessToken);
+  let refreshedCookieStrings: string[] = [];
 
   const isPrivateRoute = privateRoutes.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`)
@@ -16,15 +21,60 @@ export function proxy(request: NextRequest) {
     (route) => pathname === route || pathname.startsWith(`${route}/`)
   );
 
+  if (!accessToken && refreshToken) {
+    try {
+      const sessionResponse = await checkSession();
+      isAuthenticated =
+        sessionResponse.status === 200 && sessionResponse.data.success;
+
+      if (isAuthenticated) {
+        const setCookie = sessionResponse.headers['set-cookie'];
+        if (setCookie) {
+          const cookieArray = Array.isArray(setCookie) ? setCookie : [setCookie];
+
+          for (const cookieStr of cookieArray) {
+            const parsed = parseSetCookie(cookieStr);
+            if (parsed.value) {
+              refreshedCookieStrings.push(cookieStr);
+            }
+          }
+        }
+      }
+    } catch {
+      isAuthenticated = false;
+    }
+  }
+
   if (!isAuthenticated && isPrivateRoute) {
-    return NextResponse.redirect(new URL('/sign-in', request.url));
+    const response = NextResponse.redirect(new URL('/sign-in', request.url));
+    for (const cookieStr of refreshedCookieStrings) {
+      const parsed = parseSetCookie(cookieStr);
+      if (parsed.value) {
+        response.cookies.set(parsed.name, parsed.value, parsed);
+      }
+    }
+    return response;
   }
 
   if (isAuthenticated && isPublicRoute) {
-    return NextResponse.redirect(new URL('/profile', request.url));
+    const response = NextResponse.redirect(new URL('/', request.url));
+    for (const cookieStr of refreshedCookieStrings) {
+      const parsed = parseSetCookie(cookieStr);
+      if (parsed.value) {
+        response.cookies.set(parsed.name, parsed.value, parsed);
+      }
+    }
+    return response;
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next();
+  for (const cookieStr of refreshedCookieStrings) {
+    const parsed = parseSetCookie(cookieStr);
+    if (parsed.value) {
+      response.cookies.set(parsed.name, parsed.value, parsed);
+    }
+  }
+  return response;
 }
 
 export const config = {

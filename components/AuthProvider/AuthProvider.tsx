@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import { checkSession, getMe } from '@/lib/api/clientApi';
 import { useAuthStore } from '@/lib/store/authStore';
 
 export default function AuthProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
   const setUser = useAuthStore((state) => state.setUser);
   const clearIsAuthenticated = useAuthStore((state) => state.clearIsAuthenticated);
 
@@ -12,7 +14,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     const verifySession = async () => {
       try {
         const session = await checkSession();
-        if (!session.success) {
+        if (!session.data.success) {
           clearIsAuthenticated();
           return;
         }
@@ -23,8 +25,8 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    void verifySession();
-  }, [clearIsAuthenticated, setUser]);
+    void verifySession().finally(() => router.refresh());
+  }, [clearIsAuthenticated, router, setUser]);
 
   return <>{children}</>;
 }
